@@ -5,6 +5,7 @@ import { DeleteButton } from "./delete-button";
 import { SignOutButton } from "./signout-button";
 import { FavoriteButton } from "./favorite-button";
 import { CopyButton } from "./copy-button";
+import { ThemeToggle } from "./theme-toggle";
 
 async function getPrompts(userId?: string) {
   if (userId) {
@@ -27,15 +28,15 @@ export default async function Home() {
   const prompts = await getPrompts(session?.user?.id);
 
   return (
-    <main className="min-h-screen bg-gray-50">
+    <main className="min-h-screen bg-gray-50 dark:bg-gray-900">
       <div className="container mx-auto px-4 py-8">
         <header className="mb-8">
           <div className="flex items-center justify-between flex-wrap gap-4">
             <div>
-              <h1 className="text-4xl font-bold text-gray-900">
+              <h1 className="text-4xl font-bold text-gray-900 dark:text-gray-100">
                 Prompt Factory
               </h1>
-              <p className="text-gray-600 mt-2">
+              <p className="text-gray-600 dark:text-gray-300 mt-2">
                 {session?.user
                   ? `Willkommen zurück, ${session.user.name || session.user.email}!`
                   : "Deine persönliche Prompt-Bibliothek"}
@@ -68,13 +69,14 @@ export default async function Home() {
                   </Link>
                 </>
               )}
+              <ThemeToggle />
             </div>
           </div>
         </header>
 
         {!session?.user && (
-          <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
-            <p className="text-blue-800">
+          <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg dark:bg-blue-950 dark:border-blue-800">
+            <p className="text-blue-800 dark:text-blue-200">
               📢 <strong>Hinweis:</strong> Melde dich an, um deine eigene
               Prompt-Bibliothek zu verwalten und neue Prompts zu erstellen.
             </p>
@@ -87,10 +89,10 @@ export default async function Home() {
             return (
               <div
                 key={prompt.id}
-                className="bg-white rounded-lg shadow p-6 flex flex-col"
+                className="bg-white dark:bg-gray-800 rounded-lg shadow p-6 flex flex-col"
               >
                 <div className="flex items-start justify-between gap-2 mb-2">
-                  <h3 className="text-lg font-semibold text-gray-900 flex-1">
+                  <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 flex-1">
                     {prompt.title}
                   </h3>
                   {isOwner && (
@@ -102,28 +104,28 @@ export default async function Home() {
                   {!isOwner && prompt.isFavorite && <span>⭐</span>}
                 </div>
                 {prompt.description && (
-                  <p className="text-gray-600 text-sm mb-3">
+                  <p className="text-gray-600 dark:text-gray-300 text-sm mb-3">
                     {prompt.description}
                   </p>
                 )}
                 {prompt.content && (
-                  <pre className="text-xs text-gray-700 bg-gray-50 border border-gray-200 rounded p-2 mb-3 overflow-x-auto whitespace-pre-wrap break-words line-clamp-4">
+                  <pre className="text-xs text-gray-700 dark:text-gray-200 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded p-2 mb-3 overflow-x-auto whitespace-pre-wrap break-words line-clamp-4">
                     {prompt.content}
                   </pre>
                 )}
-                <div className="flex items-center gap-2 text-sm text-gray-500 mt-auto">
+                <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400 mt-auto">
                   {prompt.category && (
-                    <span className="bg-gray-100 px-2 py-1 rounded">
+                    <span className="bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded">
                       {prompt.category}
                     </span>
                   )}
                   {prompt.isPublic && (
-                    <span className="bg-green-100 text-green-700 px-2 py-1 rounded text-xs">
+                    <span className="bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-200 px-2 py-1 rounded text-xs">
                       öffentlich
                     </span>
                   )}
                 </div>
-                <div className="mt-3 pt-3 border-t border-gray-100 flex items-center justify-between gap-2">
+                <div className="mt-3 pt-3 border-t border-gray-100 dark:border-gray-700 flex items-center justify-between gap-2">
                   <CopyButton content={prompt.content} />
                   {isOwner && (
                     <div className="flex items-center gap-3">
@@ -144,10 +146,10 @@ export default async function Home() {
 
         {prompts.length === 0 && (
           <div className="text-center py-20">
-            <h2 className="text-2xl font-semibold text-gray-700">
+            <h2 className="text-2xl font-semibold text-gray-700 dark:text-gray-200">
               Noch keine Prompts
             </h2>
-            <p className="text-gray-500 mt-2">
+            <p className="text-gray-500 dark:text-gray-400 mt-2">
               {session?.user ? (
                 <>
                   Leg direkt los —{" "}
