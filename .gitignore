@@ -1,0 +1,21 @@
+# Node
+node_modules/
+.next/
+
+# Env / Secrets
+.env
+.env.local
+.env.*.local
+
+# Backups / Temp
+*.bak
+*.log
+imports/v1-backup.json
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/

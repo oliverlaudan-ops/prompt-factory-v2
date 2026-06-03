@@ -5,11 +5,11 @@ services:
     build: .
     ports:
       - "3000:3000"
+    env_file:
+      - .env
     environment:
-      - DATABASE_URL=postgresql://postgres:postgres@db:5432/promptfactory?schema=public
-      - NEXTAUTH_SECRET=your-secret-key-change-this-in-production
-      - NEXTAUTH_URL=http://localhost:3000
-      - NODE_ENV=production
+      # In v1 nicht zuverlässig in env_file interpolierbar, deshalb hier hart aus der .env
+      DATABASE_URL: "postgresql://postgres:${DB_PASSWORD}@db:5432/promptfactory?schema=public"
     depends_on:
       db:
         condition: service_healthy
@@ -21,7 +21,7 @@ services:
     image: postgres:16-alpine
     environment:
       - POSTGRES_USER=postgres
-      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_PASSWORD=${DB_PASSWORD}
       - POSTGRES_DB=promptfactory
     volumes:
       - postgres_data:/var/lib/postgresql/data
@@ -30,18 +30,6 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
-    restart: unless-stopped
-
-  nginx:
-    image: nginx:alpine
-    ports:
-      - "80:80"
-      - "443:443"
-    volumes:
-      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
-      - ./nginx/ssl:/etc/nginx/ssl:ro
-    depends_on:
-      - app
     restart: unless-stopped
 
 volumes:

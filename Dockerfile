@@ -2,11 +2,12 @@
 FROM node:20-alpine AS builder
 WORKDIR /app
 
-# Install dependencies
+# Prisma schema brauchen wir VOR npm ci, weil postinstall prisma generate läuft
 COPY package*.json ./
+COPY prisma ./prisma
 RUN npm ci
 
-# Copy source and build
+# Restlicher Source
 COPY . .
 RUN npx prisma generate
 RUN npm run build
@@ -17,17 +18,18 @@ WORKDIR /app
 
 ENV NODE_ENV=production
 
-# Install only production dependencies
-COPY package*.json ./
-RUN npm ci --only=production
+# OpenSSL 1.1 für Prisma query engine (musl alpine)
+RUN apk add --no-cache openssl libssl3
 
-# Copy built assets from builder
+# Schema vor npm ci bereitstellen, weil postinstall prisma generate läuft
+COPY package*.json ./
+COPY prisma ./prisma
+RUN npm ci --omit=dev
+
 COPY --from=builder /app/.next/standalone ./
 COPY --from=builder /app/.next/static ./.next/static
 COPY --from=builder /app/prisma ./prisma
 
-# Expose port
 EXPOSE 3000
 
-# Start the app
 CMD ["node", "server.js"]
