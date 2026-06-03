@@ -2,16 +2,7 @@
 
 import { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
-
-// TODO: import from @/lib/prompt-variables when detector agent merges
-// Inline fallback so this page works standalone in this worktree.
-const extractVariables = (content: string): string[] => {
-  const re = /\{\{\s*([A-Z][A-Z0-9_]*)\s*\}\}/g;
-  return Array.from(new Set([...content.matchAll(re)].map((m) => m[1]))).sort();
-};
-const renderTemplate = (content: string, values: Record<string, string>): string => {
-  return content.replace(/\{\{\s*([A-Z][A-Z0-9_]*)\s*\}\}/g, (m, name) => values[name] ?? m);
-};
+import { extractVariables, renderTemplate } from "@/lib/prompt-variables";
 
 type Prompt = {
   id: string;
