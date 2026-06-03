@@ -1,0 +1,196 @@
+"use client";
+
+import { useState, useEffect, useMemo } from "react";
+import Link from "next/link";
+
+// TODO: import from @/lib/prompt-variables when detector agent merges
+// Inline fallback so this page works standalone in this worktree.
+const extractVariables = (content: string): string[] => {
+  const re = /\{\{\s*([A-Z][A-Z0-9_]*)\s*\}\}/g;
+  return Array.from(new Set([...content.matchAll(re)].map((m) => m[1]))).sort();
+};
+const renderTemplate = (content: string, values: Record<string, string>): string => {
+  return content.replace(/\{\{\s*([A-Z][A-Z0-9_]*)\s*\}\}/g, (m, name) => values[name] ?? m);
+};
+
+type Prompt = {
+  id: string;
+  title: string;
+  description: string | null;
+  content: string;
+};
+
+export default function UsePromptPage({ params }: { params: Promise<{ id: string }> }) {
+  const [prompt, setPrompt] = useState<Prompt | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [values, setValues] = useState<Record<string, string>>({});
+  const [copied, setCopied] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const { id } = await params;
+        const res = await fetch(`/api/prompts/${id}`);
+        if (cancelled) return;
+        if (!res.ok) {
+          setError(res.status === 404 ? "Nicht gefunden" : "Laden fehlgeschlagen");
+          setLoading(false);
+          return;
+        }
+        const data: Prompt = await res.json();
+        setPrompt(data);
+        // Pre-fill variables with empty strings so all inputs are visible.
+        const vars = extractVariables(data.content);
+        const initial: Record<string, string> = {};
+        for (const v of vars) initial[v] = "";
+        setValues(initial);
+        setLoading(false);
+      } catch {
+        if (!cancelled) {
+          setError("Fehler beim Laden");
+          setLoading(false);
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [params]);
+
+  // Recompute the rendered preview every time `values` change.
+  const rendered = useMemo(() => {
+    if (!prompt) return "";
+    return renderTemplate(prompt.content, values);
+  }, [prompt, values]);
+
+  const variables = useMemo(() => {
+    if (!prompt) return [];
+    return extractVariables(prompt.content);
+  }, [prompt]);
+
+  async function onCopy() {
+    if (!prompt) return;
+    try {
+      await navigator.clipboard.writeText(rendered);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      // fallback: textarea + execCommand
+      const ta = document.createElement("textarea");
+      ta.value = rendered;
+      document.body.appendChild(ta);
+      ta.select();
+      try {
+        document.execCommand("copy");
+        setCopied(true);
+        setTimeout(() => setCopied(false), 1500);
+      } catch {
+        alert("Kopieren fehlgeschlagen");
+      }
+      document.body.removeChild(ta);
+    }
+  }
+
+  if (loading) {
+    return (
+      <main className="min-h-screen flex items-center justify-center bg-gray-50">
+        <p className="text-gray-500">Lädt…</p>
+      </main>
+    );
+  }
+
+  if (error || !prompt) {
+    return (
+      <main className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="text-center">
+          <p className="text-red-600 mb-4">{error || "Nicht gefunden"}</p>
+          <Link href="/" className="text-blue-600 hover:underline">
+            ← Zurück
+          </Link>
+        </div>
+      </main>
+    );
+  }
+
+  const hasVariables = variables.length > 0;
+
+  return (
+    <main className="min-h-screen bg-gray-50 px-4 py-8">
+      <div className="max-w-3xl mx-auto">
+        <div className="mb-6 flex items-center justify-between gap-4">
+          <h1 className="text-3xl font-bold text-gray-900 truncate">
+            {prompt.title}
+          </h1>
+          <Link
+            href="/"
+            className="text-sm text-gray-600 hover:text-gray-900 shrink-0"
+          >
+            ← Zurück
+          </Link>
+        </div>
+
+        {prompt.description && (
+          <p className="text-gray-600 mb-6">{prompt.description}</p>
+        )}
+
+        {hasVariables ? (
+          <section className="bg-white rounded-2xl shadow p-6 mb-6">
+            <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wide mb-4">
+              Variablen
+            </h2>
+            <div className="space-y-4">
+              {variables.map((name) => (
+                <div key={name}>
+                  <label
+                    htmlFor={`var-${name}`}
+                    className="block text-sm font-medium text-gray-700 mb-1"
+                  >
+                    {name}
+                  </label>
+                  <input
+                    id={`var-${name}`}
+                    type="text"
+                    value={values[name] ?? ""}
+                    onChange={(e) =>
+                      setValues((prev) => ({ ...prev, [name]: e.target.value }))
+                    }
+                    placeholder={`Wert für ${name}…`}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                  />
+                </div>
+              ))}
+            </div>
+          </section>
+        ) : (
+          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-6">
+            <p className="text-sm text-yellow-800">
+              Dieser Prompt enthält keine Variablen. Du kannst ihn trotzdem
+              direkt in die Zwischenablage kopieren.
+            </p>
+          </div>
+        )}
+
+        <section className="bg-white rounded-2xl shadow p-6 mb-6">
+          <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wide mb-4">
+            Vorschau
+          </h2>
+          <pre className="text-sm text-gray-800 bg-gray-50 border border-gray-200 rounded-lg p-4 overflow-x-auto whitespace-pre-wrap break-words max-h-96 overflow-y-auto">
+            {rendered}
+          </pre>
+        </section>
+
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={onCopy}
+            className="text-sm text-gray-600 hover:text-blue-600 transition-colors"
+          >
+            {copied ? "✓ Kopiert" : "📋 Kopieren"}
+          </button>
+        </div>
+      </div>
+    </main>
+  );
+}

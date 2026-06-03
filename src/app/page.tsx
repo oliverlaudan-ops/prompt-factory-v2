@@ -6,6 +6,14 @@ import { SignOutButton } from "./signout-button";
 import { FavoriteButton } from "./favorite-button";
 import { CopyButton } from "./copy-button";
 
+// TODO: import from @/lib/prompt-variables when detector agent merges.
+// Inline fallback duplicated here so the card can decide whether to show
+// the "Verwenden" button without a server round-trip.
+const extractVariables = (content: string): string[] => {
+  const re = /\{\{\s*([A-Z][A-Z0-9_]*)\s*\}\}/g;
+  return Array.from(new Set([...content.matchAll(re)].map((m) => m[1]))).sort();
+};
+
 async function getPrompts(userId?: string) {
   if (userId) {
     return prisma.prompt.findMany({
@@ -124,7 +132,17 @@ export default async function Home() {
                   )}
                 </div>
                 <div className="mt-3 pt-3 border-t border-gray-100 flex items-center justify-between gap-2">
-                  <CopyButton content={prompt.content} />
+                  <div className="flex items-center gap-4">
+                    <CopyButton content={prompt.content} />
+                    {extractVariables(prompt.content).length > 0 && (
+                      <Link
+                        href={`/prompts/${prompt.id}/use`}
+                        className="text-sm text-gray-600 hover:text-blue-600 transition-colors"
+                      >
+                        🔧 Verwenden
+                      </Link>
+                    )}
+                  </div>
                   {isOwner && (
                     <div className="flex items-center gap-3">
                       <Link
