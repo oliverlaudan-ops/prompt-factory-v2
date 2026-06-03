@@ -1,6 +1,7 @@
 "use client";
 
 import { Suspense, useState, FormEvent } from "react";
+import { ThemeToggle } from "@/app/theme-toggle";
 import { signIn } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
@@ -106,7 +107,10 @@ function SignInForm() {
 
 export default function SignInPage() {
   return (
-    <main className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900 px-4">
+    <main className="relative min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900 px-4">
+      <div className="absolute top-4 right-4">
+        <ThemeToggle />
+      </div>
       <Suspense fallback={<div className="text-gray-500 dark:text-gray-400">Lädt…</div>}>
         <SignInForm />
       </Suspense>
