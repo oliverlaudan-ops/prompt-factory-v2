@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { VariableHelper } from "@/app/variable-helper";
 import { ThemeToggle } from "@/app/theme-toggle";
+import { RefineButton } from "./refine-button";
 
 type Prompt = {
   id: string;
@@ -154,9 +155,15 @@ export default function EditPromptPage({ params }: { params: Promise<{ id: strin
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-              Inhalt *
-            </label>
+            <div className="flex items-center justify-between mb-1">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                Inhalt *
+              </label>
+              <RefineButton
+                promptId={prompt.id}
+                onApplied={(newContent) => setPrompt({ ...prompt, content: newContent })}
+              />
+            </div>
             <textarea
               id="prompt-content"
               ref={contentRef}

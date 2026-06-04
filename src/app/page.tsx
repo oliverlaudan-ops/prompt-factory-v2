@@ -52,6 +52,13 @@ export default async function Home() {
                   >
                     + Neuer Prompt
                   </Link>
+                  <Link
+                    href="/settings"
+                    className="px-4 py-2 text-sm bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 rounded-lg"
+                    title="Einstellungen"
+                  >
+                    ⚙️
+                  </Link>
                   <SignOutButton />
                 </>
               ) : (
