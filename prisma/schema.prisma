@@ -9,14 +9,14 @@ datasource db {
 }
 
 model User {
-  id            String    @id @default(cuid())
+  id            String            @id @default(cuid())
   name          String?
-  email         String    @unique
+  email         String            @unique
   emailVerified DateTime?
   password      String?
   image         String?
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
   prompts       Prompt[]
   accounts      Account[]
   sessions      Session[]
@@ -29,8 +29,8 @@ model User {
 model UserOllamaConfig {
   userId          String   @id
   encryptedApiKey String   @db.Text // base64(ciphertext)
-  keyIv           String   // base64(12-byte IV)
-  keyAuthTag      String   // base64(16-byte GCM tag)
+  keyIv           String // base64(12-byte IV)
+  keyAuthTag      String // base64(16-byte GCM tag)
   defaultModel    String   @default("minimax-m3:cloud")
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
@@ -73,19 +73,45 @@ model VerificationToken {
 }
 
 model Prompt {
-  id          String   @id @default(cuid())
+  id          String       @id @default(cuid())
   userId      String
   title       String
-  description String?  @db.Text
-  content     String   @db.Text
+  description String?      @db.Text
+  content     String       @db.Text
   category    String?
   tags        String?
-  isFavorite  Boolean  @default(false)
-  isPublic    Boolean  @default(false)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  isFavorite  Boolean      @default(false)
+  isPublic    Boolean      @default(false)
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  refinements Refinement[]
 
   @@index([userId])
   @@index([category])
+}
+
+/// History of AI refinements for a prompt. A row is written whenever
+/// the user accepts a refinement. We keep the original text at the
+/// time of refinement so that later we can render a diff against
+/// whatever the prompt looked like when the refinement was made.
+model Refinement {
+  id               String   @id @default(cuid())
+  promptId         String
+  /// "Snapshot" of the prompt's content before this refinement was applied.
+  sourceText       String   @db.Text
+  /// The text the AI produced and the user accepted.
+  refinedText      String   @db.Text
+  /// Model that produced the refinement (e.g. "minimax-m3:cloud").
+  model            String
+  /// Optional user instruction (e.g. "make it shorter").
+  instruction      String?  @db.Text
+  /// Token usage reported by the provider.
+  promptTokens     Int?
+  completionTokens Int?
+  totalTokens      Int?
+  createdAt        DateTime @default(now())
+  prompt           Prompt   @relation(fields: [promptId], references: [id], onDelete: Cascade)
+
+  @@index([promptId, createdAt])
 }
