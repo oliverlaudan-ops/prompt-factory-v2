@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
-import { encryptSecret, decryptSecret, isCryptoConfigured } from "@/lib/crypto";
+import { encryptSecret, isCryptoConfigured } from "@/lib/crypto";
 import { OLLAMA_CLOUD_MODELS, DEFAULT_REFINE_MODEL } from "@/lib/ollama";
 
 /**
@@ -136,6 +136,3 @@ export async function DELETE() {
     );
   }
 }
-
-/** Helper used by the refine route — re-exported here for type-safe access. */
-export { decryptSecret };
