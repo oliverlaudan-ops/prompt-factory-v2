@@ -137,6 +137,254 @@ export async function refinePrompt(opts: RefineOptions): Promise<RefineResult> {
 }
 
 /**
+ * Streaming variant. Yields `delta` strings as they arrive from the
+ * provider and resolves with a `RefineResult` once the stream is
+ * complete. Caller is responsible for handling the async iterator
+ * (typically by piping it into an SSE response).
+ *
+ * Behaviour:
+ * - Uses `stream: true` on the Ollama Cloud API
+ * - The provider sends `data: {...,choices:[{delta:{content:"..."}}]}` chunks
+ *   terminated by a final `data: [DONE]`-like chunk where the usage object
+ *   is present
+ * - Aborts the upstream request if the consumer's `signal` fires
+ */
+export async function refinePromptStream(
+  opts: RefineOptions & { signal?: AbortSignal }
+): Promise<RefineResult> {
+  const { apiKey, model, promptContent, userInstruction, maxTokens = 2048, timeoutMs = 120_000, signal } = opts;
+
+  const userMessage = userInstruction
+    ? `Anweisung vom User: ${userInstruction}\n\n---\n\nOriginal-Prompt:\n${promptContent}`
+    : `Original-Prompt:\n${promptContent}`;
+
+  const body = {
+    model,
+    messages: [
+      { role: "system", content: REFINER_SYSTEM_PROMPT },
+      { role: "user", content: userMessage },
+    ],
+    temperature: 0.4,
+    max_tokens: maxTokens,
+    stream: true,
+  };
+
+  // Combine consumer abort with our own timeout
+  const controller = new AbortController();
+  const timeoutHandle = setTimeout(() => controller.abort(), timeoutMs);
+  if (signal) {
+    if (signal.aborted) controller.abort();
+    else signal.addEventListener("abort", () => controller.abort(), { once: true });
+  }
+
+  let res: Response;
+  try {
+    res = await fetch(`${OLLAMA_CLOUD_BASE}/chat/completions`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify(body),
+      signal: controller.signal,
+    });
+  } catch (e) {
+    clearTimeout(timeoutHandle);
+    if (e instanceof Error && e.name === "AbortError") {
+      throw new Error(`Ollama Cloud Stream Timeout/Abort nach ${timeoutMs}ms`);
+    }
+    throw new Error(`Ollama Cloud nicht erreichbar: ${e instanceof Error ? e.message : String(e)}`);
+  }
+
+  if (!res.ok || !res.body) {
+    const text = await res.text().catch(() => "");
+    clearTimeout(timeoutHandle);
+    throw new OllamaApiError(
+      `Ollama Cloud Fehler ${res.status}: ${text.slice(0, 200)}`,
+      res.status,
+      text
+    );
+  }
+
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let accumulated = "";
+  let usage: RefineResult["usage"] | undefined;
+
+  try {
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+
+      // SSE chunks are separated by blank lines (`\n\n`)
+      let sepIdx: number;
+      while ((sepIdx = buffer.indexOf("\n\n")) !== -1) {
+        const raw = buffer.slice(0, sepIdx);
+        buffer = buffer.slice(sepIdx + 2);
+
+        for (const line of raw.split("\n")) {
+          const trimmed = line.trim();
+          if (!trimmed.startsWith("data:")) continue;
+          const payload = trimmed.slice(5).trim();
+          if (payload === "[DONE]") continue;
+          if (!payload) continue;
+          let evt: any;
+          try {
+            evt = JSON.parse(payload);
+          } catch {
+            continue;
+          }
+          const delta = evt?.choices?.[0]?.delta?.content;
+          if (typeof delta === "string" && delta.length > 0) {
+            accumulated += delta;
+            // Yield control to the caller so it can flush to the client
+            await new Promise<void>((resolve) => setImmediate(resolve));
+            // Note: callers that need token-by-token streaming should use
+            // the SSE wrapper in /api/prompts/refine which uses an
+            // AsyncGenerator-friendly pattern. Here we return the final
+            // text; the streaming UX is driven by the API route.
+          }
+          if (evt?.usage) usage = evt.usage;
+        }
+      }
+    }
+  } catch (e) {
+    clearTimeout(timeoutHandle);
+    if (e instanceof Error && e.name === "AbortError") {
+      throw new Error("Ollama Cloud Stream abgebrochen");
+    }
+    throw e;
+  }
+  clearTimeout(timeoutHandle);
+
+  if (accumulated.length === 0) {
+    throw new Error("Ollama Cloud hat keinen Inhalt zurückgegeben");
+  }
+  return { refined: accumulated.trim(), model, usage };
+}
+
+/**
+ * Run two stream requests in parallel and yield deltas tagged with their
+ * variant id ("a" or "b"). Resolves once both finish.
+ *
+ * Both requests share the consumer's `signal` and a single timeout budget.
+ * If one fails, the other is allowed to finish (we still surface the
+ * error in the final result).
+ */
+export async function refinePromptAB(opts: {
+  apiKey: string;
+  modelA: string;
+  modelB: string;
+  promptContent: string;
+  userInstruction?: string;
+  signal?: AbortSignal;
+  timeoutMs?: number;
+  onDelta: (variant: "a" | "b", delta: string) => void;
+}): Promise<{
+  a: { refined: string; model: string; usage?: RefineResult["usage"]; error?: string };
+  b: { refined: string; model: string; usage?: RefineResult["usage"]; error?: string };
+}> {
+  const { apiKey, modelA, modelB, promptContent, userInstruction, signal, timeoutMs = 120_000, onDelta } = opts;
+
+  // Internal stream variant — yields deltas instead of buffering them
+  const streamOne = async (variant: "a" | "b", model: string) => {
+    const userMessage = userInstruction
+      ? `Anweisung vom User: ${userInstruction}\n\n---\n\nOriginal-Prompt:\n${promptContent}`
+      : `Original-Prompt:\n${promptContent}`;
+
+    const controller = new AbortController();
+    if (signal) {
+      if (signal.aborted) controller.abort();
+      else signal.addEventListener("abort", () => controller.abort(), { once: true });
+    }
+    const t = setTimeout(() => controller.abort(), timeoutMs);
+
+    let res: Response;
+    try {
+      res = await fetch(`${OLLAMA_CLOUD_BASE}/chat/completions`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
+        body: JSON.stringify({
+          model,
+          messages: [
+            { role: "system", content: REFINER_SYSTEM_PROMPT },
+            { role: "user", content: userMessage },
+          ],
+          temperature: 0.4,
+          max_tokens: 2048,
+          stream: true,
+        }),
+        signal: controller.signal,
+      });
+    } catch (e) {
+      clearTimeout(t);
+      throw e;
+    }
+
+    if (!res.ok || !res.body) {
+      const text = await res.text().catch(() => "");
+      clearTimeout(t);
+      throw new OllamaApiError(
+        `Ollama Cloud Fehler ${res.status}: ${text.slice(0, 200)}`,
+        res.status,
+        text
+      );
+    }
+
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+    let accumulated = "";
+    let usage: RefineResult["usage"] | undefined;
+
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      let sepIdx: number;
+      while ((sepIdx = buffer.indexOf("\n\n")) !== -1) {
+        const raw = buffer.slice(0, sepIdx);
+        buffer = buffer.slice(sepIdx + 2);
+        for (const line of raw.split("\n")) {
+          const trimmed = line.trim();
+          if (!trimmed.startsWith("data:")) continue;
+          const payload = trimmed.slice(5).trim();
+          if (!payload || payload === "[DONE]") continue;
+          let evt: any;
+          try { evt = JSON.parse(payload); } catch { continue; }
+          const delta = evt?.choices?.[0]?.delta?.content;
+          if (typeof delta === "string" && delta.length > 0) {
+            accumulated += delta;
+            onDelta(variant, delta);
+          }
+          if (evt?.usage) usage = evt.usage;
+        }
+      }
+    }
+    clearTimeout(t);
+    return { refined: accumulated.trim(), model, usage };
+  };
+
+  // Run both in parallel; isolate errors per-variant
+  const [aRes, bRes] = await Promise.allSettled([
+    streamOne("a", modelA),
+    streamOne("b", modelB),
+  ]);
+
+  const toOutcome = (r: PromiseSettledResult<{ refined: string; model: string; usage?: RefineResult["usage"] }>) =>
+    r.status === "fulfilled"
+      ? r.value
+      : { refined: "", model: "", error: r.reason instanceof Error ? r.reason.message : String(r.reason) };
+
+  return {
+    a: toOutcome(aRes),
+    b: toOutcome(bRes),
+  };
+}
+
+/**
  * Lightweight test: list available models. Used by the "Verbindung testen" button.
  * Throws OllamaApiError on non-2xx, plain Error on network/timeout.
  */

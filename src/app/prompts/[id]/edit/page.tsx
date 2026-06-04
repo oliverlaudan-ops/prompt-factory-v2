@@ -17,19 +17,27 @@ type Prompt = {
   isPublic: boolean;
 };
 
+type ModelOption = { id: string; label: string; hint: string };
+
 export default function EditPromptPage({ params }: { params: Promise<{ id: string }> }) {
   const router = useRouter();
   const contentRef = useRef<HTMLTextAreaElement>(null);
   const [prompt, setPrompt] = useState<Prompt | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [modelOptions, setModelOptions] = useState<ModelOption[]>([]);
+  const [defaultModel, setDefaultModel] = useState("minimax-m3:cloud");
+  const [hasOllamaKey, setHasOllamaKey] = useState(false);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
-        const { id } = await params;
+        const [{ id }, ollamaRes] = await Promise.all([
+          params,
+          fetch("/api/settings/ollama").catch(() => null),
+        ]);
         const res = await fetch(`/api/prompts/${id}`);
         if (cancelled) return;
         if (!res.ok) {
@@ -39,6 +47,12 @@ export default function EditPromptPage({ params }: { params: Promise<{ id: strin
         }
         const data = await res.json();
         setPrompt(data);
+        if (ollamaRes && ollamaRes.ok) {
+          const ollama = await ollamaRes.json();
+          setHasOllamaKey(!!ollama.hasKey);
+          setDefaultModel(ollama.defaultModel || "minimax-m3:cloud");
+          setModelOptions(ollama.modelOptions || []);
+        }
         setLoading(false);
       } catch (e) {
         if (!cancelled) {
@@ -159,10 +173,23 @@ export default function EditPromptPage({ params }: { params: Promise<{ id: strin
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                 Inhalt *
               </label>
-              <RefineButton
-                promptId={prompt.id}
-                onApplied={(newContent) => setPrompt({ ...prompt, content: newContent })}
-              />
+              {hasOllamaKey && modelOptions.length > 0 && (
+                <RefineButton
+                  promptId={prompt.id}
+                  promptContent={prompt.content}
+                  modelOptions={modelOptions}
+                  defaultModel={defaultModel}
+                  onApplied={(newContent) => setPrompt({ ...prompt, content: newContent })}
+                />
+              )}
+              {!hasOllamaKey && (
+                <Link
+                  href="/settings"
+                  className="text-xs text-blue-600 dark:text-blue-400 hover:underline"
+                >
+                  ⚙️ Ollama-Key hinterlegen für KI-Verfeinerung
+                </Link>
+              )}
             </div>
             <textarea
               id="prompt-content"
