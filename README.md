@@ -11,6 +11,7 @@ Live: **[prompts.future-pulse.de](https://prompts.future-pulse.de)**
 - ⭐ **Favoriten** — Prompts markieren, Sortierung nach Favoriten zuerst
 - 🌍 **Public / Private** — Prompts als öffentlich markieren, sind dann auch ohne Login sichtbar
 - 🧩 **Variablen-Templates** — `{{VARIABLE_NAME}}` Pattern, Live-Preview beim Ausfüllen
+- ✨ **KI-Verfeinerung** — Prompts mit Ollama Cloud per KI verbessern (verschlüsselter API-Key pro User, 5 Modelle zur Auswahl)
 - 📋 **Prompt kopieren** — Ein-Klick in die Zwischenablage
 - 🌙 **Dark Mode** — Toggle, mit `localStorage`-Persist und OS-Preference-Detection
 - 🔒 **HTTPS** via Let's Encrypt (Auto-Renew)
@@ -26,6 +27,7 @@ Live: **[prompts.future-pulse.de](https://prompts.future-pulse.de)**
 | Database | PostgreSQL 16 (Alpine) |
 | ORM | Prisma 5.22 |
 | Auth | NextAuth v5 (beta) mit Credentials Provider + Prisma Adapter |
+| AI-Refinement | Ollama Cloud (OpenAI-kompatible API, AES-256-GCM-Key-Encryption) |
 | Deployment | Docker + Host-Nginx Reverse-Proxy + Let's Encrypt |
 
 ## Setup
@@ -44,6 +46,7 @@ cd prompt-factory-v2
 # .env aus Template erstellen
 cp .env.example .env
 # NEXTAUTH_SECRET generieren: openssl rand -base64 48
+# ENCRYPTION_KEY generieren: openssl rand -base64 32  (für verschlüsselte Ollama-API-Keys)
 # Passwort für Postgres setzen
 
 # Container starten
@@ -120,6 +123,32 @@ NODE_ENV=production
 
 `NEXTAUTH_SECRET` generieren: `openssl rand -base64 48 | head -c 64`
 
+`ENCRYPTION_KEY` generieren: `openssl rand -base64 32` (32 Bytes → 44 base64-Zeichen).
+Wird verwendet, um User-Ollama-Keys AES-256-GCM-verschlüsselt in der DB zu speichern.
+
+## ✨ KI-Verfeinerung (Ollama Cloud)
+
+User können in `/settings` ihren eigenen Ollama Cloud API-Key hinterlegen. Beim Bearbeiten
+eines Prompts steht der Button **„✨ Mit KI verbessern"** zur Verfügung.
+
+**Flow:**
+1. User hinterlegt Key in Settings → wird AES-256-GCM-verschlüsselt in `UserOllamaConfig` gespeichert
+2. Klick auf „Mit KI verbessern" → Server lädt Prompt + entschlüsselt Key
+3. Server ruft `https://ollama.com/v1/chat/completions` mit dem gewählten Modell auf
+4. KI gibt verbesserten Prompt zurück → Diff-Vorschau → User übernimmt/verwirft
+
+**Verfügbare Modelle:** `minimax-m3:cloud`, `kimi-k2.5:cloud`, `qwen3-coder:cloud`,
+`gpt-oss:120b-cloud`, `deepseek-v3.1:cloud` (in den Settings wählbar).
+
+**Sicherheit:**
+- Key wird niemals im Klartext ans Frontend oder in Logs zurückgegeben
+- Rate-Limit: 20 Verfeinerungen / Stunde pro User
+- Bei DB-Backup sind Keys ohne `ENCRYPTION_KEY` wertlos
+- Verbindungs-Test-Button in Settings (5 Tests / 5 min)
+
+**Datenschutz-Hinweis:** Beim Verfeinern wird dein Prompt an Ollama Cloud gesendet.
+Prüfe deren Datenschutzbedingungen, falls deine Prompts sensible Daten enthalten.
+
 ## Architektur
 
 ```
@@ -181,7 +210,17 @@ model User {
   name      String?
   password  String?  // bcrypt hash
   prompts   Prompt[]
+  ollamaConfig UserOllamaConfig?
   // NextAuth standard fields...
+}
+
+model UserOllamaConfig {
+  userId           String   @id
+  encryptedApiKey  String   // AES-256-GCM, base64
+  keyIv            String   // base64(12-byte IV)
+  keyAuthTag       String   // base64(16-byte GCM tag)
+  defaultModel     String   @default("minimax-m3:cloud")
+  user             User     @relation(...)
 }
 
 model Prompt {
