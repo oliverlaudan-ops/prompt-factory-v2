@@ -168,6 +168,46 @@ export default function SettingsPage() {
             >
               🔑 Key erstellen →
             </a>
+
+            {/* Anleitung für neue User — Free Tier ist verfügbar */}
+            <details className="mt-3 text-sm">
+              <summary className="cursor-pointer text-gray-700 dark:text-gray-300 font-medium hover:text-blue-600 dark:hover:text-blue-400">
+                ❓ Noch keinen Key? So erstellst du einen (kostenlos)
+              </summary>
+              <ol className="mt-3 ml-4 list-decimal space-y-1.5 text-gray-600 dark:text-gray-400">
+                <li>
+                  Gehe zu{" "}
+                  <a
+                    href="https://ollama.com/settings/keys"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-blue-600 dark:text-blue-400 hover:underline"
+                  >
+                    ollama.com/settings/keys
+                  </a>{" "}
+                  und melde dich an (Google/GitHub/Email).
+                </li>
+                <li>
+                  Klicke auf <strong>“Create API Key”</strong> und gib ihm einen
+                  sprechenden Namen (z. B. <em>“prompt-factory”</em>).
+                </li>
+                <li>
+                  Der Key wird <strong>einmal</strong> angezeigt — sofort kopieren
+                  und hier einfügen. Aus Sicherheitsgründen kannst du ihn später
+                  nicht mehr abrufen, nur einen neuen erstellen.
+                </li>
+                <li>
+                  Der Free Tier reicht für gelegentliches Verfeinern völlig aus;
+                  Paid-Tiers lohnen sich erst bei sehr vielen gleichzeitigen
+                  Requests.
+                </li>
+              </ol>
+              <p className="mt-3 text-xs text-gray-500 dark:text-gray-400">
+                💡 Du kannst den Key jederzeit hier löschen und einen neuen
+                hinterlegen — er wird dann beim nächsten Speichern
+                überschrieben.
+              </p>
+            </details>
           </div>
 
           <form onSubmit={onSave} className="space-y-4">

@@ -43,10 +43,26 @@ export function RefineButton({
   const [open, setOpen] = useState(false);
   const [mode, setMode] = useState<"ab" | "single">("ab");
   const [instruction, setInstruction] = useState("");
+
+  // Pick a sensible default for modelB: any model that is NOT modelA.
+  // We compute this lazily so that when modelOptions arrives asynchronously,
+  // the dropdowns reflect the real list rather than the empty initial array.
+  const initialModelB =
+    modelOptions.find((m) => m.id !== defaultModel)?.id ?? defaultModel;
   const [modelA, setModelA] = useState(defaultModel);
-  const [modelB, setModelB] = useState(
-    modelOptions.find((m) => m.id !== defaultModel)?.id ?? defaultModel
-  );
+  const [modelB, setModelB] = useState(initialModelB);
+
+  // If modelOptions loads after mount, re-derive modelB so the user sees
+  // a real second model in the dropdown instead of the fallback.
+  useEffect(() => {
+    if (modelOptions.length > 0 && modelB === defaultModel) {
+      const candidate = modelOptions.find((m) => m.id !== modelA);
+      if (candidate && candidate.id !== modelB) {
+        setModelB(candidate.id);
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [modelOptions]);
 
   const [running, setRunning] = useState(false);
   const [variants, setVariants] = useState<{ a: VariantState; b: VariantState }>(() =>
@@ -420,7 +436,7 @@ export function RefineButton({
                             readOnly={running && !v.text}
                             placeholder={running ? "Generiere…" : "Warte auf Generierung…"}
                             rows={mode === "ab" ? 14 : 18}
-                            className="flex-1 w-full p-3 bg-white dark:bg-gray-800 font-mono text-xs resize-none focus:outline-none focus:ring-2 focus:ring-purple-500"
+                            className="flex-1 w-full p-3 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 font-mono text-xs resize-none focus:outline-none focus:ring-2 focus:ring-purple-500"
                           />
                           {v.done && v.usage && (
                             <div className="px-3 py-1 bg-gray-50 dark:bg-gray-900 text-xs text-gray-500 border-t border-gray-200 dark:border-gray-700">

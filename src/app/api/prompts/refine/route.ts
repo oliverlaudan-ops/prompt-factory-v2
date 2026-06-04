@@ -151,6 +151,7 @@ export async function POST(request: NextRequest) {
       request.signal.addEventListener("abort", onAbort, { once: true });
 
       try {
+        console.log(`[refine] start mode=${mode} modelA=${modelA} modelB=${modelB} prompt=${promptId}`);
         send("meta", { modelA, modelB, original: prompt.content, mode });
 
         if (mode === "single") {
@@ -205,7 +206,7 @@ export async function POST(request: NextRequest) {
 
         // Log only model + tokens
         console.log(
-          `[refine] user=${session.user?.id ?? "?"} prompt=${promptId} mode=${mode} models=${modelA},${modelB}`
+          `[refine] done user=${session.user?.id ?? "?"} prompt=${promptId} mode=${mode} models=${modelA},${modelB}`
         );
       } catch (e) {
         if (e instanceof OllamaApiError) {
