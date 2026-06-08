@@ -1,10 +1,9 @@
 generator client {
   provider      = "prisma-client-js"
-  // Pin to a single target. `native` would resolve to a non-musl binary on
-  // the build machine and to musl-openssl-1.1.x on Alpine — neither matches
-  // what the runtime Alpine 3.x container ships (libssl3). Use the OpenSSL 3
-  // musl binary explicitly.
-  binaryTargets = ["linux-musl-openssl-3.0.x", "linux-musl"]
+  // Build + run target: Debian Bookworm-slim, which has libssl3.
+  // We pin the binary target to debian-openssl-3.0.x so Prisma doesn't
+  // resolve `native` to the musl variant.
+  binaryTargets = ["debian-openssl-3.0.x"]
 }
 
 datasource db {

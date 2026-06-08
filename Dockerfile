@@ -1,6 +1,11 @@
 # Build stage
-FROM node:20-alpine AS builder
+FROM node:20-bookworm-slim AS builder
 WORKDIR /app
+
+# libssl + ca-certificates für Prisma
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    openssl ca-certificates \
+ && rm -rf /var/lib/apt/lists/*
 
 # Prisma schema brauchen wir VOR npm ci, weil postinstall prisma generate läuft
 COPY package*.json ./
@@ -13,19 +18,15 @@ RUN npx prisma generate
 RUN npm run build
 
 # Production stage
-FROM node:20-alpine AS runner
+FROM node:20-bookworm-slim AS runner
 WORKDIR /app
 
 ENV NODE_ENV=production
 
-# libssl3 für Prisma query engine (musl alpine + OpenSSL 3)
-RUN apk add --no-cache libssl3
-
-# Wir setzen PRISMA_QUERY_ENGINE_BINARY explizit, damit Prisma die richtige
-# Binary lädt (linux-musl-openssl-3.0.x). Ohne das versucht Prisma 5.22
-# die `linux-musl`-Variante zu laden, die libssl.so.1.1 braucht — und
-# scheitert mit "Error loading shared library libssl.so.1.1".
-ENV PRISMA_QUERY_ENGINE_BINARY=/app/node_modules/.prisma/client/libquery_engine-linux-musl-openssl-3.0.x.so.node
+# libssl3 + ca-certificates für Prisma query engine
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    openssl ca-certificates \
+ && rm -rf /var/lib/apt/lists/*
 
 # Prisma client + binaries aus dem builder-Image übernehmen
 COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
