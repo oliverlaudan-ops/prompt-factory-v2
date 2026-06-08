@@ -1,0 +1,38 @@
+# Dependencies
+node_modules/
+.npm
+
+# Build output
+.next/
+
+# Environment / Secrets
+.env
+.env.local
+.env.*.local
+
+# Git
+.git/
+.gitignore
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Backups (local SQL dumps)
+backups/
+*.sql
+*.sql.gz
+
+# Logs
+*.log
+
+# Tests
+*.test.ts
+__tests__/
+
+# Prisma TS build info
+*.tsbuildinfo

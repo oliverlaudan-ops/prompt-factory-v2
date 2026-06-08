@@ -1,6 +1,9 @@
 generator client {
   provider      = "prisma-client-js"
-  binaryTargets = ["native", "linux-musl-openssl-3.0.x"]
+  // Build + run target: Debian Bookworm-slim, which has libssl3.
+  // We pin the binary target to debian-openssl-3.0.x so Prisma doesn't
+  // resolve `native` to the musl variant.
+  binaryTargets = ["debian-openssl-3.0.x"]
 }
 
 datasource db {
