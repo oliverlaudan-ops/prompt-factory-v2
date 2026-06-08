@@ -22,3 +22,8 @@ Thumbs.db
 
 # TS
 *.tsbuildinfo
+next-env.d.ts
+
+# Local DB dumps / runtime artefacts
+backups/
+imports/*.json

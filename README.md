@@ -1,87 +1,139 @@
 # Prompt Factory v2
 
-> Self-hosted Multi-User Prompt-Bibliothek — Next.js 14, Prisma, NextAuth, Tailwind.
+> Self-hosted multi-user prompt library — Next.js 14, Prisma, NextAuth, Tailwind.
 
-Live: **[prompts.future-pulse.de](https://prompts.future-pulse.de)**
+[🇩🇪 Deutsche Anleitung](README.de.md) · **Live demo:** <https://prompts.future-pulse.de>
 
-## Features
+---
 
-- 🔐 **Multi-User Auth** via NextAuth v5 (Email + Passwort, bcrypt)
-- 📝 **Prompts verwalten** — Erstellen, Bearbeiten, Löschen mit Multi-User-Isolation
-- ⭐ **Favoriten** — Prompts markieren, Sortierung nach Favoriten zuerst
-- 🌍 **Public / Private** — Prompts als öffentlich markieren, sind dann auch ohne Login sichtbar
-- 🧩 **Variablen-Templates** — `{{VARIABLE_NAME}}` Pattern, Live-Preview beim Ausfüllen
-- ✨ **KI-Verfeinerung** — Prompts mit Ollama Cloud per KI verbessern (verschlüsselter API-Key pro User, 5 Modelle zur Auswahl)
-- 📋 **Prompt kopieren** — Ein-Klick in die Zwischenablage
-- 🌙 **Dark Mode** — Toggle, mit `localStorage`-Persist und OS-Preference-Detection
-- 🔒 **HTTPS** via Let's Encrypt (Auto-Renew)
-- 🐳 **Docker-Compose** — App + Postgres, persistent
-
-## Stack
-
-| Komponente | Tech |
-|------------|------|
-| Frontend | Next.js 14 (App Router), React 18, TypeScript |
-| Styling | Tailwind CSS (mit `darkMode: 'class'`) |
-| Backend | Next.js API Routes |
-| Database | PostgreSQL 16 (Alpine) |
-| ORM | Prisma 5.22 |
-| Auth | NextAuth v5 (beta) mit Credentials Provider + Prisma Adapter |
-| AI-Refinement | Ollama Cloud (OpenAI-kompatible API, AES-256-GCM-Key-Encryption) |
-| Deployment | Docker + Host-Nginx Reverse-Proxy + Let's Encrypt |
-
-## Setup
-
-### Voraussetzungen
-
-- Docker + Docker Compose
-- Optional: Nginx (für Reverse-Proxy) und Certbot (für HTTPS)
-
-### Lokal
+## ⚡ Quick Start
 
 ```bash
 git clone https://github.com/oliverlaudan-ops/prompt-factory-v2.git
 cd prompt-factory-v2
 
-# .env aus Template erstellen
 cp .env.example .env
-# NEXTAUTH_SECRET generieren: openssl rand -base64 48
-# ENCRYPTION_KEY generieren: openssl rand -base64 32  (für verschlüsselte Ollama-API-Keys)
-# Passwort für Postgres setzen
+# Edit .env: at minimum set NEXTAUTH_SECRET and ENCRYPTION_KEY (see below)
 
-# Container starten
-docker-compose up -d --build
-
-# Migrationen deployen
-docker-compose exec app npx prisma migrate deploy
-
-# App läuft auf http://localhost:3000
+docker compose up -d --build
+docker compose exec app npx prisma migrate deploy
 ```
 
-### Produktion (VPS)
+App: <http://localhost:3000>. Sign up on first visit, then head to **Settings** to add your Ollama Cloud key for AI refinement.
+
+Generate the two secrets:
+```bash
+openssl rand -base64 48   # → NEXTAUTH_SECRET
+openssl rand -base64 32   # → ENCRYPTION_KEY (32 bytes, 44 base64 chars)
+```
+
+---
+
+## ✨ Features
+
+- 🔐 **Multi-user auth** — NextAuth v5, email + password, bcrypt
+- 📝 **Prompt CRUD** — multi-user isolation by `userId`
+- ⭐ **Favourites** — toggle, sorted first
+- 🌍 **Public / private** — public prompts visible without login
+- 🧩 **Variable templates** — `{{VARIABLE_NAME}}` with live preview
+- ✨ **AI refinement** — Ollama Cloud, 5 curated models, **A/B comparison mode** with SSE streaming
+- 📋 **One-click copy** to clipboard
+- 🌙 **Dark mode** — class-based, localStorage-persistent, OS-preference detection
+- 🔒 **HTTPS** via Let's Encrypt (auto-renew)
+- 🐳 **Docker Compose** — app + Postgres, persistent volume
+
+## Screenshots
+
+> Drop screenshots into `docs/screenshots/` and reference them here. Suggested shots:
+> dashboard, prompt editor, refinement A/B view, settings page (light + dark).
+
+## 🧱 Stack
+
+| Layer       | Tech |
+|-------------|------|
+| Frontend    | Next.js 14 (App Router), React 18, TypeScript strict |
+| Styling     | Tailwind CSS (`darkMode: 'class'`) |
+| Backend     | Next.js API Routes (Node 20) |
+| Database    | PostgreSQL 16 (Alpine) |
+| ORM         | Prisma 5.22 |
+| Auth        | NextAuth v5 (beta) — Credentials Provider + Prisma Adapter |
+| AI          | Ollama Cloud (OpenAI-compatible), per-user encrypted API key (AES-256-GCM) |
+| Deployment  | Docker (multi-stage, `output: 'standalone'`) + host-Nginx reverse proxy + Let's Encrypt |
+
+## 🏗️ Architecture
+
+```
+            ┌──────────────────────────────────────────────┐
+            │                  Browser                      │
+            └──────────────────────┬───────────────────────┘
+                                   │ HTTPS (443)
+                                   ▼
+            ┌──────────────────────────────────────────────┐
+            │         Host-Nginx (SSL termination)          │
+            │   /etc/nginx/sites-available/prompts.conf    │
+            └──────────────────────┬───────────────────────┘
+                                   │ http://127.0.0.1:3000
+                                   ▼
+       ┌───────────────────────────────────────────────────────┐
+       │   Docker: prompt-factory-v2_app_1  (Next.js 14)      │
+       │   • Prisma Client                                       │
+       │   • NextAuth v5 (JWT session strategy)                  │
+       │   • AES-256-GCM crypto helper for Ollama keys           │
+       │   • SSE endpoint /api/prompts/refine (streaming A/B)    │
+       └──────────────────────┬────────────────────────────────┘
+                              │ Prisma / TCP 5432
+                              ▼
+       ┌───────────────────────────────────────────────────────┐
+       │   Docker: prompt-factory-v2_db_1  (Postgres 16)      │
+       │   Volume: postgres_data                               │
+       └───────────────────────────────────────────────────────┘
+```
+
+## 📦 Project layout
+
+```
+src/
+  app/                  # Next.js App Router
+    api/                #   Backend endpoints
+      auth/             #     signin + signup
+      prompts/          #     CRUD + favorite + refinements + refine (SSE)
+      settings/         #     ollama (GET/PUT/DELETE) + test
+    auth/               #   Sign-in / sign-up pages
+    prompts/            #   Prompt list, new, edit, use
+    settings/           #   User settings UI
+  lib/                  # Shared server-side helpers
+    auth.ts             #   NextAuth v5 config (cookies hardened)
+    crypto.ts           #   AES-256-GCM helpers
+    ollama.ts           #   Ollama Cloud client (streaming + A/B)
+    prisma.ts           #   Prisma client singleton
+    prompt-variables.ts #   {{VAR}} parser / renderer
+    rate-limit.ts       #   In-memory sliding-window limiter
+    __tests__/          #   Standalone tsx test scripts
+prisma/
+  schema.prisma         # User, Prompt, UserOllamaConfig, Refinement, Account, Session
+  migrations/           # SQL migrations
+```
+
+## 🚀 Production setup (VPS)
 
 ```bash
-# 1. DNS A-Record der Domain auf VPS-IP zeigen lassen
-# 2. Repo clonen, .env anlegen
-# 3. Container starten
-docker-compose up -d --build
-docker-compose exec app npx prisma migrate deploy
+# 1. Point a DNS A record at your VPS
+# 2. Clone and configure
+git clone https://github.com/oliverlaudan-ops/prompt-factory-v2.git /opt/prompt-factory-v2
+cd /opt/prompt-factory-v2
+cp .env.example .env && nano .env
 
-# 4. Host-Nginx vhost anlegen (siehe unten)
-# 5. SSL mit Certbot
-certbot --nginx -d prompts.example.com
-```
+# 3. Build and start
+docker compose up -d --build
+docker compose exec app npx prisma migrate deploy
 
-**Nginx vhost** (`/etc/nginx/sites-available/prompts.example.com`):
-
-```nginx
+# 4. Set up the host-Nginx vhost
+sudo tee /etc/nginx/sites-available/prompts.example.com > /dev/null <<'EOF'
 server {
     listen 80;
     server_name prompts.example.com;
 
-    location /.well-known/acme-challenge/ {
-        root /var/www/letsencrypt;
-    }
+    location /.well-known/acme-challenge/ { root /var/www/letsencrypt; }
 
     location / {
         proxy_pass http://127.0.0.1:3000;
@@ -92,180 +144,88 @@ server {
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
+        # SSE needs these to avoid buffering
+        proxy_buffering off;
+        proxy_read_timeout 300s;
     }
 }
+EOF
+sudo ln -s /etc/nginx/sites-available/prompts.example.com /etc/nginx/sites-enabled/
+sudo nginx -t && sudo systemctl reload nginx
+
+# 5. HTTPS via Let's Encrypt
+sudo certbot --nginx -d prompts.example.com --redirect
 ```
 
-**SSL**:
-```bash
-ln -s /etc/nginx/sites-available/prompts.example.com /etc/nginx/sites-enabled/
-nginx -t && systemctl reload nginx
-certbot --nginx -d prompts.example.com --redirect
-```
+## ✨ AI Refinement (Ollama Cloud)
 
-## Umgebungsvariablen
-
-`.env`:
-
-```env
-# Database (für den Container: 'db' ist der Service-Name in docker-compose)
-DATABASE_URL=postgresql://postgres:DEIN_PASS@db:5432/promptfactory?schema=public
-DB_PASSWORD=DEIN_PASS
-
-# NextAuth
-NEXTAUTH_SECRET=           # 64-Zeichen Random-String
-NEXTAUTH_URL=https://prompts.example.com
-NEXTAUTH_TRUST_HOST=true
-
-# Node
-NODE_ENV=production
-```
-
-`NEXTAUTH_SECRET` generieren: `openssl rand -base64 48 | head -c 64`
-
-`ENCRYPTION_KEY` generieren: `openssl rand -base64 32` (32 Bytes → 44 base64-Zeichen).
-Wird verwendet, um User-Ollama-Keys AES-256-GCM-verschlüsselt in der DB zu speichern.
-
-## ✨ KI-Verfeinerung (Ollama Cloud)
-
-User können in `/settings` ihren eigenen Ollama Cloud API-Key hinterlegen. Beim Bearbeiten
-eines Prompts steht der Button **„✨ Mit KI verbessern"** zur Verfügung.
+Users add their own Ollama Cloud API key in **Settings**. The key is encrypted
+with AES-256-GCM (`ENCRYPTION_KEY`) before being written to the DB and is
+**never** returned in cleartext to the frontend.
 
 **Flow:**
-1. User hinterlegt Key in Settings → wird AES-256-GCM-verschlüsselt in `UserOllamaConfig` gespeichert
-2. Klick auf „Mit KI verbessern" → Server lädt Prompt + entschlüsselt Key
-3. Server ruft `https://ollama.com/v1/chat/completions` mit dem gewählten Modell auf
-4. KI gibt verbesserten Prompt zurück → Diff-Vorschau → User übernimmt/verwirft
+1. User saves key in `/settings` → encrypted at rest in `UserOllamaConfig`
+2. User clicks "✨ Mit KI verbessern" / "✨ Refine with AI" on the edit page
+3. Server decrypts the key in-memory, calls `https://ollama.com/v1/chat/completions`
+4. Server streams deltas via SSE back to the browser (token-by-token UI)
+5. User sees **two variants side-by-side** (A/B mode) and picks one
 
-**Verfügbare Modelle:** `minimax-m3:cloud`, `kimi-k2.5:cloud`, `qwen3-coder:cloud`,
-`gpt-oss:120b-cloud`, `deepseek-v3.1:cloud` (in den Settings wählbar).
+**Models (curated subset):** `minimax-m3:cloud`, `kimi-k2.5:cloud`,
+`qwen3-coder:cloud`, `gpt-oss:120b-cloud`, `deepseek-v3.1:cloud`.
 
-**Sicherheit:**
-- Key wird niemals im Klartext ans Frontend oder in Logs zurückgegeben
-- Rate-Limit: 20 Verfeinerungen / Stunde pro User
-- Bei DB-Backup sind Keys ohne `ENCRYPTION_KEY` wertlos
-- Verbindungs-Test-Button in Settings (5 Tests / 5 min)
+**Safety:**
+- Key never logged or returned to the frontend
+- Rate-limited: 20 refinements / hour / user; 5 connection tests / 5 min
+- Database backups without `ENCRYPTION_KEY` are useless on their own
+- **Privacy:** Your prompt text is sent to Ollama Cloud during refinement.
+  Check their DPA if your prompts contain sensitive data.
 
-**Datenschutz-Hinweis:** Beim Verfeinern wird dein Prompt an Ollama Cloud gesendet.
-Prüfe deren Datenschutzbedingungen, falls deine Prompts sensible Daten enthalten.
+## 🗃️ Data model
 
-## Architektur
+See [`prisma/schema.prisma`](prisma/schema.prisma). The key models are:
 
-```
-Browser
-  ↓ HTTPS
-Host-Nginx (Port 443, SSL-Termination)
-  ↓ http://127.0.0.1:3000
-Docker Container: prompt-factory-v2_app_1 (Next.js standalone)
-  ↓ Prisma Client
-Docker Container: prompt-factory-v2_db_1 (PostgreSQL 16)
-```
+- `User` — `email`, `name?`, `password?` (bcrypt)
+- `Prompt` — `userId`, `title`, `content` (supports `{{VARIABLES}}`), `isFavorite`, `isPublic`
+- `UserOllamaConfig` — 1:1 with `User`, holds the encrypted Ollama key
+- `Refinement` — history of AI refinements per prompt (for the diff view)
+- `Account` / `Session` — NextAuth standard
 
-Der `app`-Container baut Next.js im Multi-Stage-Build (`node:20-alpine`),
-nutzt `output: 'standalone'` für minimale Image-Größe. Der `db`-Container
-hält die Daten in einem named Volume `postgres_data`.
-
-## Projektstruktur
-
-```
-src/
-├── app/
-│   ├── api/
-│   │   ├── auth/[...nextauth]/route.ts    # NextAuth Handler
-│   │   ├── auth/signup/route.ts           # POST /api/auth/signup
-│   │   └── prompts/
-│   │       ├── route.ts                   # GET (list) / POST (create)
-│   │       └── [id]/
-│   │           ├── route.ts               # GET / PUT / DELETE
-│   │           └── favorite/route.ts      # PATCH (toggle favorite)
-│   ├── auth/
-│   │   ├── signin/page.tsx
-│   │   └── signup/page.tsx
-│   ├── prompts/
-│   │   ├── new/page.tsx                   # Create form
-│   │   └── [id]/
-│   │       ├── edit/page.tsx
-│   │       └── use/page.tsx               # Variable-Form + Live-Preview
-│   ├── globals.css
-│   ├── layout.tsx                         # RootLayout + Theme-Script
-│   ├── page.tsx                           # Homepage mit Prompt-Cards
-│   ├── theme-toggle.tsx                   # 🌙/☀️ Client-Component
-│   ├── variable-helper.tsx                # Chip-UI + Insert-Button
-│   └── lib-button.tsx                     # Copy / Favorite / Delete / SignOut
-├── lib/
-│   ├── auth.ts                            # NextAuth Config
-│   ├── prisma.ts                          # Prisma Client Singleton
-│   └── prompt-variables.ts                # {{VAR}} Detection + Rendering
-prisma/
-├── schema.prisma
-└── migrations/
-```
-
-## Datenmodell
-
-```prisma
-model User {
-  id        String   @id @default(cuid())
-  email     String   @unique
-  name      String?
-  password  String?  // bcrypt hash
-  prompts   Prompt[]
-  ollamaConfig UserOllamaConfig?
-  // NextAuth standard fields...
-}
-
-model UserOllamaConfig {
-  userId           String   @id
-  encryptedApiKey  String   // AES-256-GCM, base64
-  keyIv            String   // base64(12-byte IV)
-  keyAuthTag       String   // base64(16-byte GCM tag)
-  defaultModel     String   @default("minimax-m3:cloud")
-  user             User     @relation(...)
-}
-
-model Prompt {
-  id          String   @id @default(cuid())
-  userId      String
-  title       String
-  description String?
-  content     String   // @db.Text, supports {{VARIABLES}}
-  category    String?
-  tags        String?
-  isFavorite  Boolean  @default(false)
-  isPublic    Boolean  @default(false)
-  user        User     @relation(...)
-  @@index([userId])
-  @@index([category])
-}
-```
-
-## Backup / Restore
-
-V1 → V2 Import liegt in `imports/import_v1.mjs`. Nutzung:
+## 🛠️ Development
 
 ```bash
-# JSON nach /opt/prompt-factory-v2/imports/v1-backup.json legen
+npm install                # also runs `prisma generate`
+npm run dev                # Next dev server
+npm run typecheck          # tsc --noEmit
+npm test                   # all standalone tests
+npm run lint               # next lint (eslint)
+npm run db:reset           # ⚠ drops & re-migrates the dev DB
+```
+
+**Adding a new API route?** See [`CONTRIBUTING.md`](CONTRIBUTING.md) for the
+conventions (auth check, validation, error shape, rate limiting).
+
+**Adding a test?** Drop a `*.test.ts` in `src/lib/__tests__/` and add it to
+the `test` script in `package.json`. We deliberately use a tiny hand-rolled
+assert harness — no Jest, no Vitest, zero deps.
+
+## 💾 Backup / Restore
+
+A v1 → v2 import script is bundled at `imports/import_v1.mjs`:
+
+```bash
 docker cp v1-backup.json prompt-factory-v2_app_1:/app/
-docker cp import_v1.mjs prompt-factory-v2_app_1:/app/
+docker cp imports/import_v1.mjs prompt-factory-v2_app_1:/app/
 docker exec prompt-factory-v2_app_1 sh -c "cd /app && node import_v1.mjs v1-backup.json"
 ```
 
-Idempotent (überspringt Prompts mit gleichem Titel), `--force` zum Überschreiben, `--dry-run` zum Testen.
+Flags: `--force` overwrites existing prompts, `--dry-run` simulates only.
+Idempotent by default (skips prompts with the same title).
 
-## Development
+## 📄 License
 
-```bash
-# Type-Check
-npx tsc --noEmit
+MIT — see [`LICENSE`](LICENSE).
 
-# Tests
-npx tsx src/lib/__tests__/prompt-variables.test.ts
+## 🤝 Contributing
 
-# Lokal dev (ohne Docker)
-npm install
-DATABASE_URL=postgresql://... npm run dev
-```
-
-## License
-
-MIT
+PRs welcome! Read [`CONTRIBUTING.md`](CONTRIBUTING.md) first. Bug reports
+and feature requests: open an issue on GitHub.
